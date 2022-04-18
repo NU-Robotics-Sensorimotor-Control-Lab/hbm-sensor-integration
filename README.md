@@ -15,7 +15,7 @@ Step1: open cmd in windows system and then go to the "\MATLAB\R2014b\extern\engi
     d:
     cd Program Files (x86)\MATLAB\R2014b\extern\engines\python
  
-Step2:
+Step2: in the cmd window, input:
 
     python setup.py install
 
