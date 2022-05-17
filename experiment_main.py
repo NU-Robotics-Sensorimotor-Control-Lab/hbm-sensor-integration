@@ -1,6 +1,5 @@
 from multiprocessing import Process, Queue
 from data_intake import data_sender
-from data_processor import data_processor
 from Saver import data_saver
 from EMonitor import run as emonitor_run
 from GUI import launchGUI as gui_run
@@ -8,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import List
 from collections import deque
 from plotter import animation_control
+from threading import Timer
+
 
 @dataclass
 class MainExperiment:
@@ -18,33 +19,46 @@ class MainExperiment:
     paused: bool = False
 
     # Experimental variables for controlling the output
-    target_tor: float = 0.6
-    low_lim_tor: float = 0.5
-    up_lim_tor: float = 0.7
-    match_tor: float = 0.6
+    target_tor: float = 1.0
+    low_lim_tor: float = 0.8
+    up_lim_tor: float = 1.2
+    match_tor: float = 1.0
 
-    targetF: float = 0.7
-    low_limF: float = 0.6
-    up_limF: float = 0.8
-    matchF: float = 0.75
+    targetF: float = 1.0
+    low_limF: float = 0.8
+    up_limF: float = 1.2
+    matchF: float = 1.0
 
-    match_tor_zeroed: float = 0
-    matchF_zeroed: float = 0
+    max_torque: float = 1.0
+
+    EMG_1: float = 1.0
+    EMG_2: float = 1.0
+    EMG_3: float = 1.0
+    EMG_4: float = 1.0
+    EMG_5: float = 1.0
+    EMG_6: float = 1.0
+    EMG_7: float = 1.0
+    EMG_8: float = 1.0
 
     timestep: float = 0
 
     # Info about the participants
+    subject_number: float = 0
     participant_age: float = 0
     participant_gender: str = "UNSPECIFIED"
     participant_years_since_stroke: int = 0
     participant_dominant_arm: str = "RIGHT"
     participant_paretic_arm: str = "NONE"
+    participant_disabetes: str = "NO"
+    
+    shoulder_aduction_angle: float = 0
+    elbow_flexion_angle: float = 0
+    arm_length: float = 0
+    midloadcell_to_elbowjoint: float = 0
 
-    rNSA: int = 0
-    FMA: int = 0
     subject_type: str = "UNSPECIFIED"
 
-    subject_number: float = 0
+
     trial_toggle: str = "Testing"
     testing_arm: str = "Default"
 
@@ -77,270 +91,6 @@ class MainExperiment:
         if not self.cacheF:
             self.cacheF = list()
 
-"""
-experiment.mode_state will be set to START when the start button is pressed
-"""
-
-def default_demo(experiment, transfer):
-    if experiment.mode_state == "START":
-        experiment.mode_state = "SHOULDER ELBOW"
-
-    if experiment.mode_state == "SHOULDER ELBOW":
-        transfer["target_tor"] = experiment.target_tor
-        transfer["low_lim_tor"] = experiment.low_lim_tor
-        transfer["up_lim_tor"] = experiment.up_lim_tor
-        transfer["match_tor"] = experiment.match_tor_zeroed
-
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF_zeroed
-
-        transfer["sound_trigger"] = experiment.sound_trigger
-
-    elif experiment.mode_state == "SHOULDER":
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF
-
-    else:
-        print("Invalid state entered")
-
-
-def blank_screen(experiment, transfer):
-    if experiment.mode_state == "START":
-        pass
-
-    transfer = transfer
-
-
-def zero_sensors(experiment, transfer):
-    if experiment.mode_state == "START":
-        # Do the audio cue; for now print
-        experiment.saver.clear()
-
-        experiment.mode_state = "Wait"
-        experiment.prev_time = experiment.timestep
-
-    if experiment.mode_state == "Default":
-        transfer["target_tor"] = experiment.target_tor
-        transfer["low_lim_tor"] = experiment.low_lim_tor
-        transfer["up_lim_tor"] = experiment.up_lim_tor
-        transfer["match_tor"] = experiment.match_tor_zeroed
-
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF_zeroed
-
-        experiment.cache_tor = list()
-        experiment.cacheF = list()
-
-    elif experiment.mode_state == "Wait":
-        wait_time = 2
-        transfer["sound_trigger"].append("starting")
-
-        if experiment.timestep - experiment.prev_time > wait_time:
-            experiment.mode_state = "Zeroing"
-            experiment.prev_time = experiment.timestep
-
-    elif experiment.mode_state == "Zeroing":
-        zero_time = 5
-        transfer["sound_trigger"].append("relax")
-
-        if experiment.timestep - experiment.prev_time > zero_time:
-            experiment.mode_state = "Ending"
-            experiment.prev_time = experiment.timestep
-
-            experiment.tare_tor = sum(experiment.cache_tor) / len(experiment.cache_tor)
-            experiment.tare_f = sum(experiment.cacheF) / len(experiment.cacheF)
-
-            experiment.saver.save_data("Zero")
-
-        experiment.cache_tor.append(experiment.match_tor)
-        experiment.cacheF.append(experiment.matchF)
-
-    elif experiment.mode_state == "Ending":
-        end_time = 0.5
-        transfer["sound_trigger"].append("ending")
-
-        if experiment.timestep - experiment.prev_time > end_time:
-            experiment.mode_state = "Default"
-
-def mvt_flex(experiment, transfer):
-    '''
-    MVT_flex_in:        Participant is told to pull in at the elbow (flexion)
-    MVT_flex_hold:      Data is collected for at least mvt_duration
-    MVT_flex_ending:    The participant is told to relax (by the experimenter),
-                        and data is saved once the participant is relaxed
-    '''
-    if experiment.mode_state == "Default":
-        transfer["target_tor"] = experiment.target_tor
-        transfer["low_lim_tor"] = experiment.low_lim_tor
-        transfer["up_lim_tor"] = experiment.up_lim_tor
-        transfer["match_tor"] = experiment.match_tor_zeroed
-
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF_zeroed
-
-        experiment.cache_tor = list()
-        experiment.cacheF = list()
-
-    start_time, mvt_duration = 2, 5
-    if experiment.mode_state == "START":
-        transfer["sound_trigger"].append("starting")
-        experiment.saver.clear()
-
-        experiment.mode_state = "MVT_flex_in"
-        experiment.prev_time = experiment.timestep
-
-    elif experiment.mode_state == "MVT_flex_in":
-        transfer["sound_trigger"].append("in")
-        if experiment.timestep - experiment.prev_time > start_time:
-            experiment.mode_state = "MVT_flex_hold"
-            experiment.prev_time = experiment.timestep
-            
-
-    elif experiment.mode_state == "MVT_flex_hold":
-        transfer["sound_trigger"].append("hold")
-        if experiment.timestep - experiment.prev_time > mvt_duration:
-            experiment.mode_state = "MVT_flex_ending"
-            experiment.prev_time = experiment.timestep
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
-
-    elif experiment.mode_state == "MVT_flex_ending":
-        # Could implement logic to automatically call for relaxation when torque stops increasing,
-        # as opposed to relying on the experimenter to tell the participant to relax (as in the video)
-        if experiment.match_tor_zeroed < .2:
-            #Not sure if this magnitude is appropriate for relaxation
-            experiment.max_flex_tor = max(experiment.cache_tor)
-            experiment.mode_state = "ending"
-
-            experiment.saver.save_data("MVT_Flexion")
-            experiment.prev_time = experiment.timestep
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
-
-    elif experiment.mode_state == "ending":
-        end_time = 1
-        transfer["sound_trigger"].append("ending")
-
-        if experiment.timestep - experiment.prev_time > end_time:
-            experiment.mode_state = "Default"
-
-
-def mvt_exten(experiment, transfer):
-    '''
-    MVT_exten_out:      Participant is told to push out at the elbow (extension)
-    MVT_exten_hold:     Data is collected for at least mvt_duration
-    MVT_exten_ending:   The participant is told to relax (by the experimenter),
-                        and data is saved once the participant is relaxed
-    '''
-    start_time, mvt_duration = 2, 5
-    if experiment.mode_state == "START":
-        transfer["sound_trigger"].append("starting")
-        experiment.saver.clear()
-
-        experiment.mode_state = "MVT_exten_out"
-        experiment.prev_time = experiment.timestep
-
-    if experiment.mode_state == "Default":
-        transfer["target_tor"] = experiment.target_tor
-        transfer["low_lim_tor"] = experiment.low_lim_tor
-        transfer["up_lim_tor"] = experiment.up_lim_tor
-        transfer["match_tor"] = experiment.match_tor_zeroed
-
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF_zeroed
-
-        experiment.cache_tor = list()
-        experiment.cacheF = list()
-
-    elif experiment.mode_state == "MVT_exten_out":
-        if experiment.timestep - experiment.prev_time > start_time:
-            experiment.mode_state = "MVT_exten_hold"
-            experiment.prev_time = experiment.timestep
-            transfer["sound_trigger"].append("out")
-
-    elif experiment.mode_state == "MVT_exten_hold":
-        if experiment.timestep - experiment.prev_time > mvt_duration:
-            experiment.mode_state = "MVT_exten_ending"
-            experiment.prev_time = experiment.timestep
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
-
-    elif experiment.mode_state == "MVT_exten_ending":
-        # Assumes that extension results in negative torques? (to differentiate from flexion)
-        if experiment.match_tor_zeroed > -1:
-            transfer["sound_trigger"].append("ending")
-            experiment.max_exten_tor = min(experiment.cache_tor)  # Check if negative
-            experiment.mode_state = "Default"
-            experiment.saver.save_data("MVT_Extension")
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
-
-def mvt_shoulder(experiment, transfer):
-    '''
-    MVT_shoulder_up: Participant abducts the shoulder
-    MVT_shoulder_hold: Data is collected for at least mvt_duration
-    MVT_shoulder_ending: Participant relaxes, data is saved once the participant is relaxed
-    '''
-    start_time, mvt_duration = 2, 5
-    if experiment.mode_state == "START":
-        transfer["sound_trigger"].append("starting")
-        experiment.saver.clear()
-
-        experiment.mode_state = "MVT_shoulder_up"
-        experiment.prev_time = experiment.timestep
-
-    if experiment.mode_state == "Default":
-        transfer["target_tor"] = experiment.target_tor
-        transfer["low_lim_tor"] = experiment.low_lim_tor
-        transfer["up_lim_tor"] = experiment.up_lim_tor
-        transfer["match_tor"] = experiment.match_tor_zeroed
-
-        transfer["targetF"] = experiment.targetF
-        transfer["low_limF"] = experiment.low_limF
-        transfer["up_limF"] = experiment.up_limF
-        transfer["matchF"] = experiment.matchF_zeroed
-
-        experiment.cache_tor = list()
-        experiment.cacheF = list()
-
-    elif experiment.mode_state == "MVT_shoulder_up":
-        if experiment.timestep - experiment.prev_time > start_time:
-            experiment.mode_state = "MVT_shoulder_hold"
-            experiment.prev_time = experiment.timestep
-            transfer["sound_trigger"].append("up")
-
-    elif experiment.mode_state == "MVT_shoulder_hold":
-        if experiment.timestep - experiment.prev_time > mvt_duration:
-            experiment.mode_state = "MVT_shoulder_ending"
-            experiment.prev_time = experiment.timestep
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
-
-    elif experiment.mode_state == "MVT_shoulder_ending":
-        if experiment.matchF_zeroed < 1:
-            # Not sure if this magnitude is appropriate for relaxation
-            transfer["sound_trigger"].append("ending")
-            experiment.maxF = max(experiment.cacheF)
-            experiment.mode_state = "Default"
-            experiment.saver.save_data("MVT_Shoulder")
-
-        experiment.cache_tor.append(experiment.match_tor_zeroed)
-        experiment.cacheF.append(experiment.matchF_zeroed)
 
 def main():
     # Emonitor section, delegating the subprocess and connection
@@ -382,34 +132,8 @@ def main():
     plotting_p = Process(target=animation_control, args=(plotting_comm_queue,))
     plotting_p.start()
 
-    # Initialize the saver object; We'll change the stuff that gets passed in,
-    # and might change it later on
-    saver = data_saver("subject0")
-
-    saver.add_header(
-        [
-            "Current Tor",
-            "Current F",
-            "Time",
-            "Experiment Mode",
-            "Mode State",
-            "State Section",
-            "Paused",
-            "Years Since Stroke",
-            "Age",
-            "Dom. Arm",
-            "Paretic Arm",
-            "Gender",
-        ]
-    )
-
     # Initialize the experiment dataclass
     experiment = MainExperiment()
-
-    experiment.experiment_mode = "DEMO"
-    experiment.mode_state = "SHOULDER ELBOW"
-
-    experiment.saver = saver
 
     TRANSMIT_KEYS = [
         "target_tor",
@@ -424,13 +148,24 @@ def main():
         "stop_trigger",
     ]
 
-    MODE_SWITCHER = {"DEMO": default_demo, "BLANK": blank_screen, "ZERO": zero_sensors, "MVT": mvt_flex}
+    is_saved = False
+    is_saved_folder = False
+    is_ending = False
+    is_plotting = False
 
-    # If any of the windows are closed, quit for now; this is something that could be changed
+    is_ending_trial2 = False
 
     data_buffer = deque()
 
+
     while em_p.is_alive():
+        transfer = dict.fromkeys(TRANSMIT_KEYS, 0)
+
+        transfer["sound_trigger"] = []
+
+        def start_sound(string):
+            transfer["sound_trigger"] = [string]
+
         data = None
 
         while not data_intake_queue.empty():
@@ -440,91 +175,233 @@ def main():
 
         if data_buffer:
             data = data_buffer.popleft()
+            experiment.match_tor, experiment.matchF, experiment.EMG_1, experiment.EMG_2, experiment.EMG_3, experiment.EMG_4, experiment.EMG_5, experiment.EMG_6, experiment.EMG_7, experiment.EMG_8, experiment.timestep = data
 
         # Get the data from the remote controls
         while not gui_queue.empty():
             header, gui_data = gui_queue.get()
 
-            if header == "Close":
+            if header == "Subject Info":
+                experiment.subject_number = gui_data["Subject Number"]
+                experiment.participant_age = gui_data["Age"]
+                experiment.subject_type = gui_data["Subject Type"]
+                experiment.participant_gender = gui_data["Gender"]
+                experiment.participant_disabetes = gui_data["Disabetes"]
+                experiment.participant_years_since_stroke = gui_data["Years since stroke"]
+                experiment.participant_dominant_arm = gui_data["Dominant Arm"]
+                experiment.participant_paretic_arm = gui_data["Testing Arm"]
+
+                print(experiment.participant_gender)
+
+            # elif header == "Sub_Save":
+            elif header == "Jacobean Constants":
+                experiment.shoulder_aduction_angle = gui_data["Shoulder Abduction Angle (degree)"]
+                experiment.elbow_flexion_angle = gui_data["Elbow Flexion Angle (degree)"]
+                experiment.arm_length = gui_data["Arm Length (m)"]
+                experiment.midloadcell_to_elbowjoint = gui_data["Midload cell to elbow joint (m)"]
+
+                print(experiment.shoulder_aduction_angle)
+
+                is_saved_folder = True
+                if int(experiment.subject_number) < 10:
+                    subject_saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+                elif int(experiment.subject_number) < 0 and int(experiment.subject_number) > 99:
+                    print("It is an Error")
+                else:
+                    subject_saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+
+                subject_saver.add_header(
+                    [
+                        "Subject Number",
+                        "Age",
+                        "Gender",
+                        "Subject Type",
+                        "Disabetes",
+                        "Years since stroke",
+                        "Dominant Arm",
+                        "Testing Arm",
+                        "Shoulder Abduction Angle (degree)",
+                        "Elbow Flexion Angle (degree)",
+                        "Arm Length (m)",
+                        "Midload cell to elbow joint (m)",
+
+                    ]
+                )
+                saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+
+                saver.add_header(
+                    [
+                        "Time",
+                        "Target torque",
+                        "Current elbow Torque(N)",
+                        "Target force",
+                        "Current shoulder Torque (N)",
+                        "Bicep (EMG_1)",
+                        "Tricep lateral (EMG_2)",
+                        "Anterior Deltoid (EMG_3)",
+                        "Medial Deltoid (EMG_4)",
+                        "Posterior Deltoid (EMG_5)",
+                        "Pectoralis Major (EMG_6)",
+                        "Lower Trapezius (EMG_7)",
+                        "Middle Trapezius (EMG_8)",
+                    ]
+                )
+
+                saver_trial2 = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+
+                saver_trial2.add_header(
+                    [
+                        "Time",
+                        "Target torque",
+                        "Current elbow Torque(N)",
+                        "Target force",
+                        "Current shoulder Torque (N)",
+                        "Bicep (EMG_1)",
+                        "Tricep lateral (EMG_2)",
+                        "Anterior Deltoid (EMG_3)",
+                        "Medial Deltoid (EMG_4)",
+                        "Posterior Deltoid (EMG_5)",
+                        "Pectoralis Major (EMG_6)",
+                        "Lower Trapezius (EMG_7)",
+                        "Middle Trapezius (EMG_8)",
+                    ]
+                )
+
+                experiment.subject_saver = subject_saver
+                subject_saver.add_data(
+                    [
+                        experiment.subject_number,
+                        experiment.participant_age,
+                        experiment.participant_gender,
+                        experiment.subject_type,
+                        experiment.participant_disabetes,
+                        experiment.participant_years_since_stroke,
+                        experiment.participant_dominant_arm,
+                        experiment.participant_paretic_arm,
+                        experiment.shoulder_aduction_angle,
+                        experiment.elbow_flexion_angle,
+                        experiment.arm_length,
+                        experiment.midloadcell_to_elbowjoint
+                    ]
+                )
+                subject_saver.save_data("Subject Information")
+                subject_saver.clear()
+
+
+            elif header == "Close":
                 gui_p.terminate()
                 em_p.terminate()
 
-            elif header == "Subject info":
-                experiment.participant_age = gui_data["Age"]
-                experiment.participant_years_since_stroke = gui_data[
-                    "Years since stroke"
-                ]
-                experiment.participant_dominant_arm = gui_data["Dominant Arm"]
-                experiment.participant_paretic_arm = gui_data["Recovery Paretic Arm"]
-                experiment.participant_gender = gui_data["Gender"]
+            elif header == "EF_max":
+                experiment.target_tor = gui_data["Input a initial value of MVT_EF (elbow flexion)"]
+                experiment.mode_state = "Trial Type 1: MAX Measurement"
+                initial_time = experiment.timestep
+                if is_saved:
+                    saver.clear()
+                
+                is_saved = True
+                is_plotting = False
 
-                experiment.rNSA = gui_data["rNSA"]
-                experiment.FMA = gui_data["FMA"]
-                experiment.subject_type = gui_data["Subject Type"]
-
-            elif header == "Jacobean Constants":
-                pass
-
-            elif header == "Maxes":
-                pass
-
-            elif header == "Save":
-                saver.save_data(experiment.experiment_mode)
-                saver.clear()
-
-            elif header == "Erase":
-                saver.clear()
-
-            elif header == "Start":
-                experiment.subject_number = gui_data["Subject Number"]
-                experiment.trial_toggle = gui_data["Trial Toggle"]
-                experiment.testing_arm = gui_data["Testing Arm"]
-                experiment.experiment_mode = gui_data["Trial Type"]
-
-                experiment.mode_state = "START"
-
-                saver.update_save_dir("Subject"+str(experiment.subject_number))
+            elif header == "trial2_max":
+                experiment.target_tor = gui_data["Maximum elbow flexion value"]
+                experiment.mode_state = "Trial Type 2: Pre-motor assessment"
+                initial_time_trial2 = experiment.timestep
 
         if not data:
             continue
+        
+        # If the mode state is Trial Type 1: max measurement
+        if experiment.mode_state == "Trial Type 1: MAX Measurement":
+            if experiment.timestep - initial_time < 0.1:
+                start_sound("starting")
 
-        experiment.match_tor, experiment.matchF, experiment.timestep = data
+            elif experiment.timestep - initial_time >= 5.1 and experiment.timestep - initial_time <= 7.1:
+                start_sound("ending")
+            elif experiment.timestep - initial_time >= 7.1 and is_plotting == False:
+                is_ending = True
+                is_plotting = True
 
-        # invert experiment.match_tor
-        experiment.match_tor = -experiment.match_tor
-
-        experiment.match_tor_zeroed = experiment.match_tor - experiment.tare_tor
-        experiment.matchF_zeroed = experiment.matchF - experiment.tare_f
-
-        # This aligns with the header; if we change the order of the header, this has to be changed as well
-        saver.add_data(
-            [
-                experiment.match_tor_zeroed,
-                experiment.matchF_zeroed,
+        if is_ending:
+            is_ending = False
+            experiment.max_torque = saver.save_and_plot_data("MAX Measurement")
+            print('max_torque is ')
+            print(experiment.max_torque)
+            gui_data = [
                 experiment.timestep,
-                experiment.experiment_mode,
-                experiment.mode_state,
-                experiment.state_section,
-                experiment.paused,
-                experiment.participant_years_since_stroke,
-                experiment.participant_age,
-                experiment.participant_dominant_arm,
-                experiment.participant_paretic_arm,
-                experiment.participant_gender,
+                experiment.target_tor,
+                experiment.match_tor,
+                experiment.max_torque
             ]
-        )
+            if not gui_out_queue.full():
+                gui_out_queue.put((gui_data))
+            is_get_max_torque = True
+        
+
+        if is_saved_folder:
+            saver.add_data(
+                [
+                    experiment.timestep,
+                    experiment.target_tor,
+                    experiment.match_tor,
+                    experiment.targetF,
+                    experiment.matchF,
+                    experiment.EMG_1,
+                    experiment.EMG_2,
+                    experiment.EMG_3,
+                    experiment.EMG_4,
+                    experiment.EMG_5,
+                    experiment.EMG_6,
+                    experiment.EMG_7,
+                    experiment.EMG_8,
+                ]
+            )
+
+            saver_trial2.add_data(
+                [
+                    experiment.timestep,
+                    experiment.target_tor,
+                    experiment.match_tor,
+                    experiment.targetF,
+                    experiment.matchF,
+                    experiment.EMG_1,
+                    experiment.EMG_2,
+                    experiment.EMG_3,
+                    experiment.EMG_4,
+                    experiment.EMG_5,
+                    experiment.EMG_6,
+                    experiment.EMG_7,
+                    experiment.EMG_8,
+                ]
+            )
+
+        # If the mode state is Trial Type 2: Pre-motor assessment
+        if experiment.mode_state == "Trial Type 2: Pre-motor assessment":
+            if experiment.timestep - initial_time_trial2 < 0.1:
+                start_sound("starting")
+
+            elif experiment.timestep - initial_time_trial2 >= 5.1 and experiment.timestep - initial_time_trial2 <= 7.1:
+                start_sound("ending")
+            elif experiment.timestep - initial_time_trial2 >= 7.1:
+                is_ending_trial2 = True
+    
+        if is_ending_trial2:
+            is_ending_trial2 = False
+            experiment.max_torque = saver.save_data("Pre-motor assessment")
 
         # Initializes the dict of outputs with zeros
         # Care should be taken S.T. dict is initialized with valid, legal
         # arguments
-        transfer = dict.fromkeys(TRANSMIT_KEYS, 0)
-
-        transfer["sound_trigger"] = []
         transfer["stop_trigger"] = False
 
-        # Call the function that corresponds to the current mode
-        # They all should take in the experiment dataclass and the transfer dict
-        MODE_SWITCHER[experiment.experiment_mode](experiment, transfer)
+        transfer["target_tor"] = experiment.target_tor
+        transfer["low_lim_tor"] = str(float(experiment.target_tor) * 0.9)
+        transfer["up_lim_tor"] = str(float(experiment.target_tor) * 1.1)
+        transfer["match_tor"] = experiment.match_tor
+
+        transfer["targetF"] = experiment.targetF
+        transfer["low_limF"] = str(float(experiment.targetF) * 0.9)
+        transfer["up_limF"] = str(float(experiment.targetF) * 1.1)
+        transfer["matchF"] = experiment.matchF
 
         # This runs slowly, so we can run the emonitor whenever it's convenient
         if not emonitor_queue.full():
@@ -534,26 +411,30 @@ def main():
             # These are the values to be plotted. The first value MUST be the
             # timestep, but the rest may be changed
             graph_titles = [
-                "signal1",
-                "signal1_zeroed",
-                "tare_signal1",
-                "",
-                "signal2",
-                "signal2 zeroed",
-                "tare signal2",
-                ""
+                "Elbow Torque(Nm)",
+                "Shoulder Torque (Nm)",
+                "Bicep (EMG_1)",
+                "Tricep lateral (EMG_2)",
+                "Anterior Deltoid (EMG_3)",
+                "Medial Deltoid (EMG_4)",
+                "Posterior Deltoid (EMG_5)",
+                "Pectoralis Major (EMG_6)",
+                "Lower Trapezius (EMG_7)",
+                "Middle Trapezius (EMG_8)",
             ]
 
             graph_data = [
                 experiment.timestep,
                 experiment.match_tor,
-                experiment.match_tor_zeroed,
-                experiment.tare_tor,
-                0,
                 experiment.matchF,
-                experiment.matchF_zeroed,
-                experiment.tare_f,
-                0,
+                experiment.EMG_1,
+                experiment.EMG_2,
+                experiment.EMG_3,
+                experiment.EMG_4,
+                experiment.EMG_5,
+                experiment.EMG_6,
+                experiment.EMG_7,
+                experiment.EMG_8,
             ]
             plotting_comm_queue.put((graph_data, graph_titles))
 

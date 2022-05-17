@@ -9,7 +9,9 @@ import pyqtgraph as pg
 import sys  # We need sys so that we can pass argv to QApplication
 from multiprocessing import Queue
 from collections import deque
-
+import warnings
+warnings.simplefilter("ignore", UserWarning)
+sys.coinit_flags = 2
 
 class MainWindow2(QtWidgets.QMainWindow):
     """MainWindow inherits from QMainWindow and holds the values for the plotting
@@ -28,16 +30,16 @@ class MainWindow2(QtWidgets.QMainWindow):
         self.app = app
 
         # TODO: Set num channels automatically based on length of data intake
-        self.num_channels = 8
+        self.num_channels = 10
         self.update_speed_ms = 1
         self.window_size = 4
         self.num_points = 500
 
         
         #Titles to be adjusted depending on what variables are graphed in experiment_main
-        self.plot_titles = ["Matching Elbow Torque", "Matching Elbow Torque Zeroed",
-                            "Tared Elbow Torque", "", "Matching Shoulder Force",
-                            "Matching Shoulder Force Zeroed", "Tared Shoulder Force", ""]
+        self.plot_titles = ["Elbow Torque(Nm)", "Shoulder Torque (Nm)",
+                            "Bicep (EMG_1)", "Tricep lateral (EMG_2)", "Anterior Deltoid (EMG_3)","Medial Deltoid (EMG_4)",
+                            "Posterior Deltoid (EMG_5)", "Pectoralis Major (EMG_6)", "Lower Trapezius (EMG_7)", "Middle Trapezius (EMG_8)"]
 
         self._init_timeseries()
         self.timer = QtCore.QTimer()
@@ -86,6 +88,7 @@ class MainWindow2(QtWidgets.QMainWindow):
         data, titles = val
 
         # First value will be time, next 8 will be datapoints
+        # print(data)
         current_time = data[0]
         data_sensors = data[1:]
 
@@ -117,3 +120,13 @@ def animation_control(comm_queue):
     w = MainWindow2(comm_queue, app)
     w.show()
     sys.exit(app.exec_())
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    w = MainWindow2(app)
+    w.show()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
+

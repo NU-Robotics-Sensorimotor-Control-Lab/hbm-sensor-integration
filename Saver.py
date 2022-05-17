@@ -1,4 +1,7 @@
 import os
+import csv
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class data_saver(object):
@@ -15,6 +18,7 @@ class data_saver(object):
         """
         self.data_cache = []
         self.save_dir = os.getcwd() + "/data/" + save_directory
+        self.save_directory = save_directory
         
         self.header = None
 
@@ -78,6 +82,82 @@ class data_saver(object):
 
         print(f"Successfully wrote to file {path}{mode}_data{i}.csv")
         return
+
+    def save_and_plot_data(self, mode):
+        """
+        Command that creates and writes a new file based on the cache
+
+        :param mode: tell the object the mode, which informs the directory to
+        be saved in
+
+        :return: returns nothing
+        """
+        path = f"{self.save_dir}/{mode}/"
+
+        try:
+            os.makedirs(path)
+        except OSError:
+            # print("Creation of the directory %s failed" % path)
+            pass
+        else:
+            print("Successfully created the directory %s" % path)
+
+        i = 0
+        while os.path.exists(f"{path}{mode}_data{i}.csv"):
+            i += 1
+
+        with open(f"{path}{mode}_data{i}.csv", "w") as file:
+            if self.header:
+                file.write(",".join([str(x) for x in self.header]) + "\n")
+
+            for line in self.data_cache:
+                file.write(",".join([str(x) for x in line]) + "\n")
+
+        print(f"Successfully wrote to file {path}{mode}_data{i}.csv")
+        Open_path = os.getcwd() + "/data/" + self.save_directory + "/" + f"{mode}/{mode}_data{i}.csv"
+        self.plot(Open_path)
+        return self.max_torque
+
+    def plot(self, open_path):
+        File = open(open_path)
+        Reader = csv.reader(File)
+        Data = list(Reader)
+
+        x = []
+        y = []
+
+        for i in range(1, len(Data)):
+            x.append(float(Data[i][0]) - float(Data[1][0]))
+            y.append(float(Data[i][2])) 
+
+        plt.plot(x,y, label='original')
+
+        # add MAF filter
+        F = 250
+        i = 1
+        value = []
+        time = []
+        while i < len(y) - F +1:
+            B = y[i:i+F]
+            B_ave = sum(B)/F
+            value.append(B_ave)
+
+            C = x[i:i+F]
+            C_ave = sum(C)/F
+            time.append(C_ave)
+            i +=1
+
+        plt.annotate('Max torque : '+ str(max(value)), xy=(x[value.index(max(value))], max(value)), xytext=(x[value.index(max(value))], max(value)+6),
+                    xycoords='data',
+                    arrowprops=dict(facecolor='black', shrink=0.01)
+                    )
+
+        plt.plot(time,value, label='Filterd plot')
+        plt.legend()
+        plt.xlabel("Time (s)")
+        plt.ylabel("Torque (Nm)")
+        plt.show()
+        self.max_torque = max(value)
 
 
 if __name__ == "__main__":

@@ -50,15 +50,15 @@ class EMonitor:
             return
 
         # These should all be doubles
-        self.target_tor = io_array['target_tor']
-        self.low_lim_tor = io_array['low_lim_tor']
-        self.up_lim_tor = io_array['up_lim_tor']
-        self.match_tor = io_array['match_tor']
+        self.target_tor = float(io_array['target_tor'])
+        self.low_lim_tor = float(io_array['low_lim_tor'])
+        self.up_lim_tor = float(io_array['up_lim_tor'])
+        self.match_tor = float(io_array['match_tor'])
 
-        self.targetF = io_array['targetF']
-        self.low_limF = io_array['low_limF']
-        self.up_limF = io_array['up_limF']
-        self.matchF = io_array['matchF']
+        self.targetF = float(io_array['targetF'])
+        self.low_limF = float(io_array['low_limF'])
+        self.up_limF = float(io_array['up_limF'])
+        self.matchF = float(io_array['matchF'])
 
         # This should be an array of booleans
         self.sound_trigger = io_array['sound_trigger']
@@ -88,7 +88,7 @@ def run(interval, conn):
     print(f"{SCREEN_INDEX = }")
 
     # Create objects for the pyglet window and fps display
-    window = pyglet.window.Window(fullscreen=False, screen=screens[SCREEN_INDEX])
+    window = pyglet.window.Window(width=640, height=400, fullscreen=False, screen=screens[SCREEN_INDEX])
     # window = pyglet.window.Window(fullscreen=True, screen=screens[SCREEN_INDEX])
     fps_display = pyglet.window.FPSDisplay(window=window)
 
