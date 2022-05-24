@@ -70,7 +70,7 @@ class data_saver(object):
             print("Successfully created the directory %s" % path)
 
         i = 0
-        while os.path.exists(f"{path}{mode}_data{i}.csv"):
+        while os.path.exists(f"{path}Set1_trial{i}.csv"):
             i += 1
 
         with open(f"{path}{mode}_data{i}.csv", "w") as file:
@@ -80,7 +80,7 @@ class data_saver(object):
             for line in self.data_cache:
                 file.write(",".join([str(x) for x in line]) + "\n")
 
-        print(f"Successfully wrote to file {path}{mode}_data{i}.csv")
+        print(f"Successfully wrote to file {path}Set1_trial{i}.csv")
         return
 
     def save_and_plot_data(self, mode):
@@ -103,18 +103,18 @@ class data_saver(object):
             print("Successfully created the directory %s" % path)
 
         i = 0
-        while os.path.exists(f"{path}{mode}_data{i}.csv"):
+        while os.path.exists(f"{path}Set1_trial{i}.csv"):
             i += 1
 
-        with open(f"{path}{mode}_data{i}.csv", "w") as file:
+        with open(f"{path}Set1_trial{i}.csv", "w") as file:
             if self.header:
                 file.write(",".join([str(x) for x in self.header]) + "\n")
 
             for line in self.data_cache:
                 file.write(",".join([str(x) for x in line]) + "\n")
 
-        print(f"Successfully wrote to file {path}{mode}_data{i}.csv")
-        Open_path = os.getcwd() + "/data/" + self.save_directory + "/" + f"{mode}/{mode}_data{i}.csv"
+        print(f"Successfully wrote to file {path}Set1_trial{i}.csv")
+        Open_path = os.getcwd() + "/data/" + self.save_directory + "/" + f"{mode}/Set1_trial{i}.csv"
         self.plot(Open_path)
         return self.max_torque
 

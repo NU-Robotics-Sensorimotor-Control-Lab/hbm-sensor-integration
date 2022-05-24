@@ -153,7 +153,11 @@ def main():
     is_ending = False
     is_plotting = False
 
+    is_saved_trial2 = False
     is_ending_trial2 = False
+    is_plotting_trial2 = False
+
+    is_break = False
 
     data_buffer = deque()
 
@@ -204,11 +208,11 @@ def main():
 
                 is_saved_folder = True
                 if int(experiment.subject_number) < 10:
-                    subject_saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+                    subject_saver = data_saver(experiment.subject_type+"0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
                 elif int(experiment.subject_number) < 0 and int(experiment.subject_number) > 99:
                     print("It is an Error")
                 else:
-                    subject_saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+                    subject_saver = data_saver(experiment.subject_type+"0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
 
                 subject_saver.add_header(
                     [
@@ -227,7 +231,7 @@ def main():
 
                     ]
                 )
-                saver = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+                saver = data_saver(experiment.subject_type+"0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
 
                 saver.add_header(
                     [
@@ -247,7 +251,7 @@ def main():
                     ]
                 )
 
-                saver_trial2 = data_saver(experiment.subject_type+" Subject0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
+                saver_trial2 = data_saver(experiment.subject_type+"0"+str(int(experiment.subject_number))+"/"+experiment.participant_paretic_arm)
 
                 saver_trial2.add_header(
                     [
@@ -284,7 +288,7 @@ def main():
                         experiment.midloadcell_to_elbowjoint
                     ]
                 )
-                subject_saver.save_data("Subject Information")
+                subject_saver.save_data("Subject_Information")
                 subject_saver.clear()
 
 
@@ -302,10 +306,13 @@ def main():
                 is_saved = True
                 is_plotting = False
 
-            elif header == "trial2_max":
-                experiment.target_tor = gui_data["Maximum elbow flexion value"]
-                experiment.mode_state = "Trial Type 2: Pre-motor assessment"
+            elif header == "Trial2_automatic":
+                experiment.target_tor = float(gui_data["Maximum elbow flexion value"])*0.25
+                experiment.mode_state = "trial2_auto"
                 initial_time_trial2 = experiment.timestep
+                if is_saved_trial2:
+                    saver_trial2.clear()
+                is_plotting_trial2 = False
 
         if not data:
             continue
@@ -323,7 +330,7 @@ def main():
 
         if is_ending:
             is_ending = False
-            experiment.max_torque = saver.save_and_plot_data("MAX Measurement")
+            experiment.max_torque = saver.save_and_plot_data("MAX_Measurement")
             print('max_torque is ')
             print(experiment.max_torque)
             gui_data = [
@@ -373,16 +380,169 @@ def main():
                     experiment.EMG_8,
                 ]
             )
+        
+        # Time
+        Hold_time = 1.0
+        Match_time = 1.0    
+        Relax_time = 1.3
+
+        Starting_time = 1.2
+        TrigBuzzStop_timer_time = 0.2
+        Ending_time = 1.0
+        Z_force_out_of_range_time = 1.5
+        wrong_direction_time = 1.5   
+
+        In_time = 1.0
+        Out_time = 1.0
+        Up_time = 1.0
+        Down_time = 1.0
+
+        # up
+        start_time_1 = 0.1+Starting_time+0.5
+        end_time_1 = start_time_1+Up_time
+
+        start_time_2 = end_time_1+2.0
+        end_time_2 = start_time_2+Hold_time+1.0
+
+        start_time_3 = end_time_2+1.5
+        end_time_3 = start_time_3+Relax_time+1.5
+
+        start_time_4 = end_time_3
+        end_time_4 = start_time_4+Ending_time+0.5 
+
+        # in
+        start_time_5 = end_time_4+1.0
+        end_time_5 = start_time_5+Starting_time+0.5 
+
+        start_time_6 = end_time_5
+        end_time_6 = start_time_6+Up_time
+
+        start_time_7 = end_time_6+2.0
+        end_time_7 = start_time_7+Hold_time+1.0
+
+        start_time_8 = end_time_7+1.5
+        end_time_8 = start_time_8+Relax_time+1.5
+
+        start_time_9 = end_time_8
+        end_time_9 = start_time_9+Ending_time+0.5 
+
+        # up and in
+        start_time_10 = end_time_9+1.0
+        end_time_10 = start_time_10+Starting_time+0.5 
+
+        start_time_11 = end_time_10
+        end_time_11 = start_time_11+Up_time
+
+        start_time_12 = end_time_11+2.0
+        end_time_12 = start_time_12+Hold_time+1.0
+
+        start_time_13 = end_time_12
+        end_time_13 = start_time_13+Relax_time+1.5
+
+        start_time_14 = end_time_13+2.0
+        end_time_14 = start_time_14+Ending_time+0.5 
+
+        start_time_15 = end_time_14+1.5
+        end_time_15 = start_time_15+Relax_time+1.5
+
+        start_time_16 = end_time_15
+        end_time_16 = start_time_16+Ending_time+0.5 
+
 
         # If the mode state is Trial Type 2: Pre-motor assessment
-        if experiment.mode_state == "Trial Type 2: Pre-motor assessment":
-            if experiment.timestep - initial_time_trial2 < 0.1:
+        # gui_data = [
+        #         experiment.trial2_direction,
+        #         experiment.trial2_status,
+        #     ]
+        # if not gui_out_queue.full():
+        #     gui_out_queue.put((gui_data))
+
+        # automatic : UP IN UP&IN
+        if experiment.mode_state == "trial2_auto":
+            SimTime = experiment.timestep - initial_time_trial2 
+            # Up trial
+            if SimTime < 0.1 and is_break == False:
+                start_sound("starting")             
+
+            elif SimTime >= start_time_1 and SimTime <= end_time_1 and is_break == False:
+                start_sound("up")
+
+            elif SimTime >= start_time_2 and SimTime <= end_time_2 and is_break == False:
+                if experiment.match_tor >= float(experiment.target_tor) * 0.8 and experiment.match_tor <= float(experiment.target_tor) * 1.2:
+                    start_sound("hold")
+                else:
+                    is_break = True
+
+            # hold for 1.5 second 
+            elif SimTime >= start_time_3 and SimTime <= end_time_3 and is_break == False:
+                start_sound("relax")
+
+            elif SimTime >= start_time_4 and SimTime <= end_time_4 and is_break == False:
+                start_sound("ending")
+            
+            # In trial
+            elif SimTime >= start_time_5 and SimTime <= end_time_5 and is_break == False:
                 start_sound("starting")
 
-            elif experiment.timestep - initial_time_trial2 >= 5.1 and experiment.timestep - initial_time_trial2 <= 7.1:
+            elif SimTime >= start_time_6 and SimTime <= end_time_6 and is_break == False:
+                start_sound("in")
+
+            elif SimTime >= start_time_7 and SimTime <= end_time_7 and is_break == False:
+                if experiment.match_tor >= float(experiment.target_tor) * 0.8 and experiment.match_tor <= float(experiment.target_tor) * 1.2:
+                    start_sound("hold")
+                else:
+                    is_break = True
+
+            # hold for 1.5 second 
+            elif SimTime >= start_time_8 and SimTime <= end_time_8 and is_break == False:
+                start_sound("relax")
+
+            elif SimTime >= start_time_9 and SimTime <= end_time_9 and is_break == False:
                 start_sound("ending")
-            elif experiment.timestep - initial_time_trial2 >= 7.1:
+
+            # In trial
+            elif SimTime >= start_time_10 and SimTime <= end_time_10  and is_break == False:
+                start_sound("starting")
+
+            elif SimTime >= start_time_11 and SimTime <= end_time_11 and is_break == False:
+                start_sound("up")
+
+            elif SimTime >= start_time_12 and SimTime <= end_time_12 and is_break == False:
+                if experiment.match_tor >= float(experiment.target_tor) * 0.8 and experiment.match_tor <= float(experiment.target_tor) * 1.2:
+                    start_sound("hold")
+                else:
+                    is_break = True
+
+            elif SimTime >= start_time_13 and SimTime <= end_time_13 and is_break == False:
+                start_sound("in")
+
+            elif SimTime >= start_time_14 and SimTime <= end_time_14 and is_break == False:
+                if experiment.match_tor >= float(experiment.target_tor) * 0.8 and experiment.match_tor <= float(experiment.target_tor) * 1.2:
+                    start_sound("hold")
+                else:
+                    is_break = True
+
+            # hold for 1.5 second 
+            elif SimTime >= start_time_15 and SimTime <= end_time_15 and is_break == False:
+                start_sound("relax")
+
+            elif SimTime >= start_time_16 and SimTime <= end_time_16 and is_break == False:
+                start_sound("ending")
                 is_ending_trial2 = True
+
+
+            elif is_break:
+                start_sound("out of range")
+                is_ending_trial2 = True
+            
+            
+
+
+            # elif experiment.timestep - initial_time_trial2 >= 5.1 and experiment.timestep - initial_time_trial2 <= 7.1:
+            #     start_sound("ending")
+            # elif experiment.timestep - initial_time_trial2 >= 7.1 and is_plotting_trial2 == False:
+            #     is_ending_trial2 = True
+            #     is_plotting_trial2 = True
     
         if is_ending_trial2:
             is_ending_trial2 = False
