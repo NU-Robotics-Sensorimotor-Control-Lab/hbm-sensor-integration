@@ -13,17 +13,16 @@ class EMonitor:
         self.n_sounds = 13
 
         # Initialize the target forces
-        self.target_tor = 1
-        self.up_lim_tor = 1
-        self.target_tor = 1
-        self.match_tor = 1
-        self.low_lim_tor = 1
+        self.target_EL_tor = 1
+        self.up_lim_EL_tor = 1
+        self.match_EL_tor = 1
+        self.low_lim_EL_tor = 1
 
         # Initialize Force Parameters
-        self.targetF = 1
-        self.up_limF = 1
-        self.low_limF = 1
-        self.matchF = 1
+        self.target_SH_tor = 1
+        self.up_lim_SH_tor = 1
+        self.low_lim_SH_tor = 1
+        self.match_SH_tor = 1
 
         self.sound_trigger = []
         self.sounds_playing = []
@@ -50,15 +49,15 @@ class EMonitor:
             return
 
         # These should all be doubles
-        self.target_tor = float(io_array['target_tor'])
-        self.low_lim_tor = float(io_array['low_lim_tor'])
-        self.up_lim_tor = float(io_array['up_lim_tor'])
-        self.match_tor = float(io_array['match_tor'])
+        self.target_EL_tor = float(io_array['target_EL_tor'])
+        self.low_lim_EL_tor = float(io_array['low_lim_EL_tor'])
+        self.up_lim_EL_tor = float(io_array['up_lim_EL_tor'])
+        self.match_EL_tor = float(io_array['match_EL_tor'])
 
-        self.targetF = float(io_array['targetF'])
-        self.low_limF = float(io_array['low_limF'])
-        self.up_limF = float(io_array['up_limF'])
-        self.matchF = float(io_array['matchF'])
+        self.target_SH_tor = float(io_array['target_SH_tor'])
+        self.low_lim_SH_tor = float(io_array['low_lim_SH_tor'])
+        self.up_lim_SH_tor = float(io_array['up_lim_SH_tor'])
+        self.match_SH_tor = float(io_array['match_SH_tor'])
 
         # This should be an array of booleans
         self.sound_trigger = io_array['sound_trigger']
@@ -244,29 +243,29 @@ def run(interval, conn):
             match_target_radius = 0
             representation_radius = 0
 
-            if m.target_tor != 0:
+            if m.target_EL_tor != 0:
                 match_target_radius = int(HEIGHT / 1.5)
-                lower_range_radius = int(match_target_radius * (m.low_lim_tor / m.target_tor))
-                upper_range_radius = int(match_target_radius * (m.up_lim_tor / m.target_tor))
-                representation_radius = int(match_target_radius * (m.match_tor / m.target_tor))
+                lower_range_radius = int(match_target_radius * (m.low_lim_EL_tor / m.target_EL_tor))
+                upper_range_radius = int(match_target_radius * (m.up_lim_EL_tor / m.target_EL_tor))
+                representation_radius = int(match_target_radius * (m.match_EL_tor / m.target_EL_tor))
 
             # Code to set the moving Y coordinates
-            targetF_line = 0
+            target_SH_tor_line = 0
             lowF_line = 0
             upF_line = 0
             matchY = 0
 
 
-            if m.targetF != 0:
-                targetF_line = center_y
+            if m.target_SH_tor != 0:
+                target_SH_tor_line = center_y
 
-                lowF_line = targetF_line * (m.low_limF / m.targetF)
-                upF_line = targetF_line * (m.up_limF / m.targetF)
+                lowF_line = target_SH_tor_line * (m.low_lim_SH_tor / m.target_SH_tor)
+                upF_line = target_SH_tor_line * (m.up_lim_SH_tor / m.target_SH_tor)
 
-                # The C# Code has matchY = center_y * ((2 - m.matchF) / m.targetF)
+                # The C# Code has matchY = center_y * ((2 - m.match_SH_tor) / m.target_SH_tor)
                 # i'm not sure why the 2.0 - is present though, so I deleted it
                 # This might have to be reintroduced sometime
-                matchY = center_y * ((m.matchF) / m.targetF)
+                matchY = center_y * ((m.match_SH_tor) / m.target_SH_tor)
 
             window.clear()
 
@@ -283,7 +282,7 @@ def run(interval, conn):
                 (lowF_line, BLUE),
                 (upF_line, BLUE),
                 (matchY, RED),
-                (targetF_line, BLACK),
+                (target_SH_tor_line, BLACK),
             ]
 
             batch = pyglet.graphics.Batch()

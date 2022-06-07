@@ -88,91 +88,6 @@ class NI_Interface:
             return False
         return QX_IPadd  
 
-    def start_hbm(self):
-        
-        Connector = Int32(0)
-        Channel = Int32(0)
-        Signal = Int32(0)
-        UserSignalID = Int32(1)
-        nBuffer = Int32(20000)
-
-        # Connect QuantumX with Computer
-        QX_IPadd = self.HBM_Scan()
-        UUID = UInt64(QXSystem.Connect(QX_IPadd))
-
-        # read signal
-        signal_0 = QXSystem.ReadSyncSignal(UUID, Connector, Signal)
-
-        # modify the output rate
-        signal_0.OutputRate = Double(1200.0)
-
-        # assign
-        QXSystem.AssignSyncSignal(UUID, Connector, signal_0)
-
-        # re-read
-        signal_0 = QXSystem.ReadSyncSignal(UUID, Connector, Signal)
-
-        # setup the DAQ
-        QXSimpleDAQ.SubscribeSignal(UUID, signal_0.Output.SignalReference, UserSignalID, nBuffer)
-
-        # Start DAQ
-        QXSimpleDAQ.StartDAQ()
-        return UserSignalID, UUID, signal_0.Output.SignalReference
-
-
-# def main():
-#     sample_delay = 1/1000
-#     ni_interface = NI_Interface()
-#     sample_cache = []
-#     prev_time = time.perf_counter()
-
-#     UserSignalID, UUID, SignalReference = ni_interface.start_hbm()
-#     QX_IPadd = ni_interface.HBM_Scan()
-
-#     hbm_cache = []
-
-#     for i in range(20):
-#         samples = ni_interface.read_samples()
-
-#         # HBM_data = QXSimpleDAQ.GetSinglePoint(UUID, SignalReference, Double(0.0))
-#         QXSimpleDAQ.GetDataBlock()
-#         result = QXSimpleDAQ.GetSignalData(UserSignalID, None)
-#         if result[0] != 0:
-#             value = list(result[1].Values)
-
-#         # if samples:
-#         #     sample_cache.extend(samples)
-
-#             # prev_time += sample_delay
-#         # print(samples)
-#         if value:
-#             hbm_cache.extend(value)
-#         System.Threading.Thread.Sleep(1)
-#         for sample_list in samples:
-#             if hbm_cache:
-#                 print(sample_list)
-#                 Fz = hbm_cache.pop(0)
-#                 sample_list.insert(0, Fz)
-#                 sample_list.insert(1, 0.0)
-#                 print(sample_list)
-#                 sample_cache.append(sample_list)
-#                 prev_time += sample_delay
-            
-#     print(sample_cache)
-
-    # samples = ni_interface.read_samples()
-
-    # if samples:
-    #     sample_cache.extend(samples)
-
-    #     prev_time += sample_delay
-    # print(samples)
-    # print(sample_cache)
-    # print(prev_time)
-
-# if __name__ == "__main__":
-#     main()
-
 
 def data_sender(
     sample_delay, send_queue: Queue = None, communication_queue: Queue = None
@@ -190,35 +105,62 @@ def data_sender(
     prev_time = time.perf_counter()
 
     hbm_cache = []
-    UserSignalID, UUID, SignalReference = ni_interface.start_hbm()
     QX_IPadd = ni_interface.HBM_Scan()
+    UUID = QXSystem.Connect(QX_IPadd)
+
+    i = 0
+    sum_Fx = 0
+    sum_Fy = 0
+    sum_Fz = 0
+    sum_Mx = 0
+    sum_My = 0
+    sum_Mz = 0
 
     while running:
         samples = ni_interface.read_samples()
         
-        # # read HBM sensor data
-        # QXSimpleDAQ.GetDataBlock()
-        # result = QXSimpleDAQ.GetSignalData(UserSignalID, None)
 
-        # if result[0] != 0:
-        #     value = list(result[1].Values)
+        Hbm_data = list(QXSimpleDAQ.GetSingleShot(UInt64(UUID), Boolean(False), None, None)[1])
 
-        value = QXSimpleDAQ.GetSinglePoint(UUID, SignalReference, Double(0)) - 28.219445650110993
-        # System.Threading.Thread.Sleep(10)
-        #sample list [10 vales ,time]
-        # 1000 Hz 1000 date 
-        if value and samples:
+        Fz = (Hbm_data[0]+Hbm_data[1])/2
+        Fy = (Hbm_data[2]+Hbm_data[3])/2
+        Fx = (Hbm_data[4]+Hbm_data[5])/2
+
+
+        Mz = (Hbm_data[6]+Hbm_data[7])/2
+        My = (Hbm_data[8]+Hbm_data[9])/2
+        Mx = (Hbm_data[10]+Hbm_data[11])/2
+
+        if i < 100:
+            sum_Fx += Fx
+            sum_Fy += Fy
+            sum_Fz += Fz
+            sum_Mx += Mx
+            sum_My += My
+            sum_Mz += Mz
+        i += 1
+        
+        if i >= 105:
+            Fx = Fx - sum_Fx/100
+            Fy = Fy - sum_Fy/100
+            Fz = Fz - sum_Fz/100
+            Mx = Mx - sum_Mx/100
+            My = My - sum_My/100
+            Mz = Mz - sum_Mz/100
+
+
+        if Fz and samples:
             for sample_list in samples:
-                sample_list.insert(0, value)
-                sample_list.insert(1, 0.0)
+                sample_list.insert(0, Fz)
+                sample_list.insert(1, Fy)
+                sample_list.insert(2, Fx)
+
+                sample_list.insert(3, Mz)
+                sample_list.insert(4, My)
+                sample_list.insert(5, Mx)
     
                 sample_cache.append(sample_list)
                 prev_time += sample_delay
-
-        # if samples:
-        #     sample_cache.extend(samples)
-
-        #     prev_time += sample_delay
 
         if not send_queue.full() and sample_cache:
             send_queue.put_nowait(sample_cache)
